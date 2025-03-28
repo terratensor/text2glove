@@ -1,0 +1,16 @@
+# Binaries
+bin/
+*.exe
+
+# IDE
+.idea/
+.vscode/
+
+# Go
+go.sum
+*.test
+*.out
+
+# Output files
+output.txt
+*.log
