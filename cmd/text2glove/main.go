@@ -28,6 +28,8 @@ func init() {
 	pflag.Int("workers", runtime.NumCPU(), "Number of workers")
 	pflag.Int("buffer_size", 1024*1024, "Writer buffer size in bytes")
 	pflag.Int("report_every", 100, "Report progress every N files")
+	pflag.String("cleaner_mode", "old_slavonic", "Cleaner mode: modern|old_slavonic|all")
+	pflag.Bool("normalize", true, "Apply Unicode normalization")
 }
 
 func main() {
@@ -46,6 +48,7 @@ func main() {
 	}
 
 	startTime := time.Now()
+
 	config := utils.Config{
 		InputDir:     viper.GetString("input"),
 		OutputFile:   viper.GetString("output"),
@@ -53,12 +56,15 @@ func main() {
 		BufferSize:   viper.GetInt("buffer_size"),
 		ReportEvery:  viper.GetInt("report_every"),
 	}
+	config.Cleaner.Mode = viper.GetString("cleaner_mode")
+	config.Cleaner.Normalize = viper.GetBool("normalize")
 
 	fmt.Println("=== Starting Text2Glove ===")
-	fmt.Printf("Configuration: %+v\n", config)
+	fmt.Printf("Cleaner mode: %s\n", config.Cleaner.Mode)
+	fmt.Printf("Unicode normalization: %v\n", config.Cleaner.Normalize)
 
 	// Initialize components
-	textCleaner := cleaner.New()
+	textCleaner := cleaner.New(cleaner.CleanMode(config.Cleaner.Mode))
 	fileProcessor := processor.New(textCleaner)
 	resultWriter := writer.New(config.OutputFile, config.BufferSize)
 
