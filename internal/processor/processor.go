@@ -11,6 +11,10 @@ import (
 	"github.com/terratensor/text2glove/internal/cleaner"
 )
 
+const (
+	maxTokenSize = 10 * 1024 * 1024 // 10MB максимальный размер токена
+)
+
 type FileProcessor struct {
 	cleaner *cleaner.TextCleaner
 }
@@ -57,6 +61,10 @@ func (p *FileProcessor) processFile(filePath string) (string, error) {
 
 	var builder strings.Builder
 	scanner := bufio.NewScanner(gz)
+
+	// Увеличиваем буфер сканера
+	buf := make([]byte, 0, maxTokenSize)
+	scanner.Buffer(buf, maxTokenSize)
 
 	for scanner.Scan() {
 		line := scanner.Text()

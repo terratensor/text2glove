@@ -1,4 +1,4 @@
-input: "/media/audetv/terratensor/corpus/flibusta_2023_143861_txt"
+input: "/media/audetv/terratensor/corpus/flibusta_2025_txt"
 output: "./output.txt"
 workers: 32
 buffer_size: 1048576  # 1MB
