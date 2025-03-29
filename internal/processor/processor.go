@@ -12,7 +12,7 @@ import (
 )
 
 const (
-	maxTokenSize = 10 * 1024 * 1024 // 10MB максимальный размер токена
+	maxTokenSize = 10 * 1024 * 1024 // 10MB
 )
 
 type FileProcessor struct {
@@ -35,13 +35,15 @@ func (p *FileProcessor) Work(id int, fileChan <-chan string, textChan chan<- str
 			continue
 		}
 
-		textChan <- text
+		if text != "" {
+			textChan <- text
+		}
 
-		// Report progress
 		newProcessed := atomic.AddUint64(&processed, 1)
 		if newProcessed%uint64(reportEvery) == 0 {
+			progress := float64(newProcessed) / float64(totalFiles) * 100
 			fmt.Printf("Worker %d: processed %d/%d (%.1f%%)\n",
-				id, newProcessed, totalFiles, float64(newProcessed)/float64(totalFiles)*100)
+				id, newProcessed, totalFiles, progress)
 		}
 	}
 }
@@ -62,7 +64,6 @@ func (p *FileProcessor) processFile(filePath string) (string, error) {
 	var builder strings.Builder
 	scanner := bufio.NewScanner(gz)
 
-	// Увеличиваем буфер сканера
 	buf := make([]byte, 0, maxTokenSize)
 	scanner.Buffer(buf, maxTokenSize)
 
@@ -71,7 +72,7 @@ func (p *FileProcessor) processFile(filePath string) (string, error) {
 		cleanLine := p.cleaner.Clean(line)
 		if cleanLine != "" {
 			builder.WriteString(cleanLine)
-			builder.WriteString(" ")
+			builder.WriteRune(' ')
 		}
 	}
 
