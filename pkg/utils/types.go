@@ -12,6 +12,11 @@ type Config struct {
 		Normalize      bool   `yaml:"normalize"`
 		PreserveSpaces bool   `yaml:"preserve_spaces"`
 	} `yaml:"cleaner"`
+
+	Logger struct {
+		LongWordsLog string `yaml:"long_words_log"` // путь к файлу лога
+		Enabled      bool   `yaml:"enabled"`        // включить логирование
+	} `yaml:"logger"`
 }
 
 type CleanMode string
