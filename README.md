@@ -56,6 +56,22 @@ normalize: true # Нормализация Unicode
 text2glove --config config.yaml
 ```
 
+Запуск с параметрами:
+```bash
+gtext2glove --input ./data --output out.txt
+```
+
+Пример ожидаемого вывода:
+```bash
+    Processing: [=====================>  ] 85.3% | Speed: 142,305.8 KB/s | Lines: 1,284,567
+
+    === Processing completed ===
+    Time:    12m45s
+    Lines:   14,201,558
+    Data:    12.4 GB
+    Speed:   152,304.2 KB/s
+```
+
 ## Режимы обработки текста
 
 1. **modern** - современные языки:
