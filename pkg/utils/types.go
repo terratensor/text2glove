@@ -11,6 +11,7 @@ type Config struct {
 		Mode           string `yaml:"mode"`
 		Normalize      bool   `yaml:"normalize"`
 		PreserveSpaces bool   `yaml:"preserve_spaces"`
+		ReplaceYo      bool   `yaml:"replace_yo"` // Замена ё на е
 	} `yaml:"cleaner"`
 
 	Logger struct {
@@ -19,12 +20,18 @@ type Config struct {
 	} `yaml:"logger"`
 
 	Tokens struct {
-		URL     string `yaml:"url"`
-		Email   string `yaml:"email"`
-		Number  string `yaml:"number"`
-		Hashtag string `yaml:"hashtag"`
-		Mention string `yaml:"mention"`
+		URLs     bool `yaml:"urls"`
+		Emails   bool `yaml:"emails"`
+		Numbers  bool `yaml:"numbers"`
+		Hashtags bool `yaml:"hashtags"`
+		Mentions bool `yaml:"mentions"`
 	} `yaml:"tokens"`
+
+	Preserve struct {
+		Dates     bool `yaml:"preserve_dates"`
+		Fractions bool `yaml:"preserve_fractions"`
+		Decimals  bool `yaml:"preserve_decimals"`
+	} `yaml:"preserve"`
 }
 
 type CleanMode string

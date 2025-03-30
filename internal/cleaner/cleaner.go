@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/terratensor/text2glove/pkg/utils"
 	"golang.org/x/text/unicode/norm"
 )
 
@@ -24,21 +25,15 @@ type TextCleaner struct {
 	longWordsLog *os.File
 	logEnabled   bool
 	logMutex     sync.Mutex
+	config       utils.Config
 }
 
-func New(mode CleanMode) *TextCleaner {
-	return &TextCleaner{
-		re:   createCleanupRegexp(mode),
-		mode: mode,
-	}
-}
-
-func NewWithLogger(mode CleanMode, logPath string, enabled bool) (*TextCleaner, error) {
+func NewWithLogger(mode CleanMode, config utils.Config) (*TextCleaner, error) {
 	var logFile *os.File
 	var err error
 
-	if enabled && logPath != "" {
-		logFile, err = os.OpenFile(logPath, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
+	if config.Logger.Enabled && config.Logger.LongWordsLog != "" {
+		logFile, err = os.OpenFile(config.Logger.LongWordsLog, os.O_APPEND|os.O_CREATE|os.O_WRONLY, 0644)
 		if err != nil {
 			return nil, fmt.Errorf("failed to open log file: %v", err)
 		}
@@ -48,7 +43,8 @@ func NewWithLogger(mode CleanMode, logPath string, enabled bool) (*TextCleaner, 
 		re:           createCleanupRegexp(mode),
 		mode:         mode,
 		longWordsLog: logFile,
-		logEnabled:   enabled,
+		logEnabled:   config.Logger.Enabled,
+		config:       config,
 	}, nil
 }
 
@@ -59,21 +55,49 @@ func (c *TextCleaner) Clean(text string) string {
 	// Приводим к нижнему регистру с учетом Unicode
 	text = strings.ToLower(text)
 
+	// Языковые преобразования (русский)
+	if c.config.Cleaner.ReplaceYo {
+		text = strings.ReplaceAll(text, "ё", "е")
+	}
+
+	// Сохранение дат
+	if c.config.Preserve.Dates {
+		// ISO (2000-12-31), американский (12/31/2000), европейский (31.12.2000)
+		datePattern := `(?:\d{4}-\d{2}-\d{2})|(?:\d{1,2}[/\-\.]\d{1,2}[/\-\.]\d{2,4})`
+		text = regexp.MustCompile(datePattern).ReplaceAllStringFunc(text, func(match string) string {
+			return " " + match + " " // Добавляем пробелы для сохранения как отдельного токена
+		})
+	}
+
+	// Сохранение дробных чисел
+	if c.config.Preserve.Fractions {
+		// Простые дроби (2/3, 1/4 и т.д.)
+		fractionPattern := `\b\d+/\d+\b`
+		text = regexp.MustCompile(fractionPattern).ReplaceAllStringFunc(text, func(match string) string {
+			return " " + match + " "
+		})
+	}
+
+	// Сохранение десятичных чисел
+	if c.config.Preserve.Decimals {
+		// Числа с плавающей точкой (5.20, 5,20)
+		decimalPattern := `\b\d+[\.,]\d+\b`
+		text = regexp.MustCompile(decimalPattern).ReplaceAllStringFunc(text, func(match string) string {
+			// Нормализуем разделитель к точке
+			normalized := strings.Replace(match, ",", ".", 1)
+			return " " + normalized + " "
+		})
+	}
+
 	// Замена специальных сущностей
-	text = regexp.MustCompile(`(https?://|www\.)[^\s]+`).ReplaceAllString(text, " <url> ")
-	text = regexp.MustCompile(`\S+@\S+\.\S+`).ReplaceAllString(text, " <email> ")
-	text = regexp.MustCompile(`\d+`).ReplaceAllString(text, " <num> ")
-	text = regexp.MustCompile(`#[a-zа-яё0-9_]+`).ReplaceAllString(text, " <hashtag> ")
-	text = regexp.MustCompile(`@[a-zа-яё0-9_]+`).ReplaceAllString(text, " <mention> ")
+	// text = regexp.MustCompile(`(https?://|www\.)[^\s]+`).ReplaceAllString(text, " <url> ")
+	// text = regexp.MustCompile(`\S+@\S+\.\S+`).ReplaceAllString(text, " <email> ")
+	// text = regexp.MustCompile(`\d+`).ReplaceAllString(text, " <num> ")
+	// text = regexp.MustCompile(`#[a-zа-яё0-9_]+`).ReplaceAllString(text, " <hashtag> ")
+	// text = regexp.MustCompile(`@[a-zа-яё0-9_]+`).ReplaceAllString(text, " <mention> ")
 
 	// Основная очистка текста
 	text = c.re.ReplaceAllString(text, "")
-
-	// Нормализация пунктуации
-	// text = regexp.MustCompile(`(!|\?|\.){2,}`).ReplaceAllString(text, "$1$1")
-
-	// Языковые преобразования (русский)
-	text = strings.ReplaceAll(text, "ё", "е")
 
 	// Удаление слишком длинных слов с логированием
 	if c.logEnabled {
@@ -93,14 +117,17 @@ func createCleanupRegexp(mode CleanMode) *regexp.Regexp {
 
 	switch mode {
 	case ModeModern:
-		// Разрешаем < и > для токенов, добавляем апостроф для английского
-		pattern = `[^\p{L}\p{N}\sа-яёa-zà-ÿğüşıöç'<>]`
+		// Современные языки: русский, английский, основные европейские
+		pattern = `[^\p{L}\p{N}\sа-яёa-zà-ÿğüşıöç]`
+
 	case ModeOldSlavonic:
+		// Старославянские символы (явное перечисление)
 		oldSlavonicChars := "ѣѢѵѴіІѳѲѫѪѭѬѧѦѩѨѯѮѱѰѡѠѿѾҌҍꙋꙊꙗꙖꙙꙘꙜꙛꙝꙞꙟꙠꙡꙢꙣꙤꙥꙦꙧꙨꙩꙪꙫꙬꙭꙮѻѺѹѸѷѶѵѴѳѲѱѰѯѮѭѬѫѪѩѨѧѦѥѤѣѢѣѢѡѠџЏѾѽѼѻѺѹѸ"
-		pattern = `[^\p{L}\p{N}\s` + oldSlavonicChars + `<>]`
+		pattern = `[^\p{L}\p{N}\s` + oldSlavonicChars + `]`
+
 	case ModeAll:
-		// Все буквы Unicode + <>
-		pattern = `[^\p{L}\p{N}\s<>]`
+		// Все буквы Unicode
+		pattern = `[^\p{L}\p{N}\s]`
 	}
 
 	re, err := regexp.Compile(pattern)

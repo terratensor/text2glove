@@ -32,10 +32,23 @@ func init() {
 	pflag.Int("report_every", 100, "Report progress every N files")
 	pflag.String("cleaner_mode", "all", "Cleaner mode: modern|old_slavonic|all")
 	pflag.Bool("normalize", true, "Apply Unicode normalization")
+	pflag.Bool("replace_yo", true, "Replace 'ё' with 'е' for Russian")
+	pflag.Bool("preserve_spaces", false, "Preserve original spaces")
+
+	// Флаги для токенов
+	pflag.Bool("token_urls", true, "Replace URLs with <url> token")
+	pflag.Bool("token_emails", true, "Replace emails with <email> token")
+	pflag.Bool("token_numbers", false, "Replace numbers with <num> token")
+	pflag.Bool("token_hashtags", false, "Replace hashtags with <hashtag> token")
+	pflag.Bool("token_mentions", false, "Replace mentions with <mention> token")
 
 	// Новые флаги для логирования длинных слов
 	pflag.String("long_words_log", "./long_words.log", "Path to long words log file")
 	pflag.Bool("log_long_words", true, "Enable logging of long removed words")
+
+	pflag.Bool("preserve_dates", true, "Preserve dates in various formats")
+	pflag.Bool("preserve_fractions", true, "Preserve fractional numbers (like 2/3)")
+	pflag.Bool("preserve_decimals", true, "Preserve decimal numbers (5.20, 5,20)")
 }
 
 func main() {
@@ -62,12 +75,28 @@ func main() {
 		BufferSize:   viper.GetInt("buffer_size"),
 		ReportEvery:  viper.GetInt("report_every"),
 	}
+
+	// Настройки очистки
 	config.Cleaner.Mode = viper.GetString("cleaner_mode")
 	config.Cleaner.Normalize = viper.GetBool("normalize")
+	config.Cleaner.ReplaceYo = viper.GetBool("replace_yo")
+	config.Cleaner.PreserveSpaces = viper.GetBool("preserve_spaces")
+
+	// Настройки токенов
+	config.Tokens.URLs = viper.GetBool("token_urls")
+	config.Tokens.Emails = viper.GetBool("token_emails")
+	config.Tokens.Numbers = viper.GetBool("token_numbers")
+	config.Tokens.Hashtags = viper.GetBool("token_hashtags")
+	config.Tokens.Mentions = viper.GetBool("token_mentions")
 
 	// Конфигурация логгера из флагов или конфига
 	config.Logger.LongWordsLog = viper.GetString("long_words_log")
 	config.Logger.Enabled = viper.GetBool("log_long_words")
+
+	// Конфигурация сохранения дат
+	config.Preserve.Dates = viper.GetBool("preserve_dates")
+	config.Preserve.Fractions = viper.GetBool("preserve_fractions")
+	config.Preserve.Decimals = viper.GetBool("preserve_decimals")
 
 	fmt.Println("=== Starting Text2Glove ===")
 	fmt.Printf("Number of workers: %v\n", config.WorkersCount)
@@ -78,13 +107,10 @@ func main() {
 		fmt.Printf("Long words log file: %s\n", config.Logger.LongWordsLog)
 	}
 
-	// Initialize components
-	// textCleaner := cleaner.New(cleaner.CleanMode(config.Cleaner.Mode))
-	// Initialize components with logger
+	// Инициализация cleaner с полной конфигурацией
 	textCleaner, err := cleaner.NewWithLogger(
 		cleaner.CleanMode(config.Cleaner.Mode),
-		config.Logger.LongWordsLog,
-		config.Logger.Enabled,
+		config,
 	)
 	if err != nil {
 		log.Fatal(err)
