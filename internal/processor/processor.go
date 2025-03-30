@@ -25,6 +25,12 @@ func New(cleaner *cleaner.TextCleaner) *FileProcessor {
 }
 
 func (p *FileProcessor) Work(id int, fileChan <-chan string, textChan chan<- string, progressChan chan<- int) {
+	defer func() {
+		if r := recover(); r != nil {
+			fmt.Printf("\r\x1b[31mWorker %d panic: %v\x1b[0m\n", id, r)
+		}
+	}()
+
 	var processed int
 
 	for file := range fileChan {

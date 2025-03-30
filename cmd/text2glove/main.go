@@ -32,6 +32,10 @@ func init() {
 	pflag.Int("report_every", 100, "Report progress every N files")
 	pflag.String("cleaner_mode", "all", "Cleaner mode: modern|old_slavonic|all")
 	pflag.Bool("normalize", true, "Apply Unicode normalization")
+
+	// Новые флаги для логирования длинных слов
+	pflag.String("long_words_log", "./long_words.log", "Path to long words log file")
+	pflag.Bool("log_long_words", true, "Enable logging of long removed words")
 }
 
 func main() {
@@ -61,13 +65,32 @@ func main() {
 	config.Cleaner.Mode = viper.GetString("cleaner_mode")
 	config.Cleaner.Normalize = viper.GetBool("normalize")
 
+	// Конфигурация логгера из флагов или конфига
+	config.Logger.LongWordsLog = viper.GetString("long_words_log")
+	config.Logger.Enabled = viper.GetBool("log_long_words")
+
 	fmt.Println("=== Starting Text2Glove ===")
 	fmt.Printf("Number of workers: %v\n", config.WorkersCount)
 	fmt.Printf("Cleaner mode: %s\n", config.Cleaner.Mode)
 	fmt.Printf("Unicode normalization: %v\n", config.Cleaner.Normalize)
+	fmt.Printf("Long words logging: %v\n", config.Logger.Enabled)
+	if config.Logger.Enabled {
+		fmt.Printf("Long words log file: %s\n", config.Logger.LongWordsLog)
+	}
 
 	// Initialize components
-	textCleaner := cleaner.New(cleaner.CleanMode(config.Cleaner.Mode))
+	// textCleaner := cleaner.New(cleaner.CleanMode(config.Cleaner.Mode))
+	// Initialize components with logger
+	textCleaner, err := cleaner.NewWithLogger(
+		cleaner.CleanMode(config.Cleaner.Mode),
+		config.Logger.LongWordsLog,
+		config.Logger.Enabled,
+	)
+	if err != nil {
+		log.Fatal(err)
+	}
+	defer textCleaner.Close()
+
 	fileProcessor := processor.New(textCleaner)
 	resultWriter := writer.New(config.OutputFile, config.BufferSize)
 

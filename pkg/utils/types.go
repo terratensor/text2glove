@@ -17,6 +17,14 @@ type Config struct {
 		LongWordsLog string `yaml:"long_words_log"` // путь к файлу лога
 		Enabled      bool   `yaml:"enabled"`        // включить логирование
 	} `yaml:"logger"`
+
+	Tokens struct {
+		URL     string `yaml:"url"`
+		Email   string `yaml:"email"`
+		Number  string `yaml:"number"`
+		Hashtag string `yaml:"hashtag"`
+		Mention string `yaml:"mention"`
+	} `yaml:"tokens"`
 }
 
 type CleanMode string

@@ -7,3 +7,6 @@ cleaner:
   mode: "all"  # modern | old_slavonic | all
   normalize: true       # применять Unicode-нормализацию
   preserve_spaces: false # сохранять оригинальные пробелы
+logger:
+  long_words_log: "./long_words.log"  # путь к файлу лога
+  enabled: true                       # включить логирование
