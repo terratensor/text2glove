@@ -4,6 +4,6 @@ workers: 8
 buffer_size: 1048576  # 1MB
 report_every: 100
 cleaner:
-  mode: "old_slavonic"  # modern | old_slavonic | all
+  mode: "all"  # modern | old_slavonic | all
   normalize: true       # применять Unicode-нормализацию
   preserve_spaces: false # сохранять оригинальные пробелы

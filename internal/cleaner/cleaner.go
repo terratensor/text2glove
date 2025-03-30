@@ -3,7 +3,6 @@ package cleaner
 import (
 	"regexp"
 	"strings"
-	"unicode"
 
 	"golang.org/x/text/unicode/norm"
 )
@@ -49,42 +48,22 @@ func createCleanupRegexp(mode CleanMode) *regexp.Regexp {
 
 	switch mode {
 	case ModeModern:
-		// Современные языки (русский, английский, европейские)
+		// Современные языки: русский, английский, основные европейские
 		pattern = `[^\p{L}\p{N}\sа-яёa-zà-ÿğüşıöç]`
+
 	case ModeOldSlavonic:
-		// Старославянские символы + современные
-		pattern = `[^\p{L}\p{N}\s\p{In_Cyrillic}\p{In_Cyrillic_Supplement}\p{In_Cyrillic_Extended-A}\p{In_Cyrillic_Extended-B}\p{In_Cyrillic_Extended-C}]`
+		// Старославянские символы (явное перечисление)
+		oldSlavonicChars := "ѣѢѵѴіІѳѲѫѪѭѬѧѦѩѨѯѮѱѰѡѠѿѾҌҍꙋꙊꙗꙖꙙꙘꙜꙛꙝꙞꙟꙠꙡꙢꙣꙤꙥꙦꙧꙨꙩꙪꙫꙬꙭꙮѻѺѹѸѷѶѵѴѳѲѱѰѯѮѭѬѫѪѩѨѧѦѥѤѣѢѣѢѡѠџЏѾѽѼѻѺѹѸ"
+		pattern = `[^\p{L}\p{N}\s` + oldSlavonicChars + `]`
+
 	case ModeAll:
 		// Все буквы Unicode
-		pattern = `[^\p{L}\p{N}\s]`
-	default:
 		pattern = `[^\p{L}\p{N}\s]`
 	}
 
 	re, err := regexp.Compile(pattern)
 	if err != nil {
-		panic("Failed to compile regexp: " + err.Error())
+		panic("Failed to compile regexp for mode " + string(mode) + ": " + err.Error())
 	}
 	return re
-}
-
-// Альтернативный метод для точной обработки символов
-func (c *TextCleaner) CleanManual(text string) string {
-	var builder strings.Builder
-	builder.Grow(len(text))
-
-	for _, r := range text {
-		// Проверяем категорию Unicode
-		if unicode.IsLetter(r) || unicode.IsNumber(r) {
-			builder.WriteRune(unicode.ToLower(r))
-		} else if unicode.IsSpace(r) {
-			builder.WriteRune(' ')
-		}
-		// Специальная обработка для старославянских символов
-		// может быть добавлена здесь при необходимости
-	}
-
-	// Нормализуем пробелы
-	result := strings.Join(strings.Fields(builder.String()), " ")
-	return strings.TrimSpace(result)
 }
