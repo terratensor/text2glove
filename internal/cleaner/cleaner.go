@@ -40,7 +40,7 @@ func NewWithLogger(mode CleanMode, config utils.Config) (*TextCleaner, error) {
 	}
 
 	return &TextCleaner{
-		re:           createCleanupRegexp(mode),
+		re:           createCleanupRegexp(mode, config.Preserve.Dates, config.Preserve.Fractions),
 		mode:         mode,
 		longWordsLog: logFile,
 		logEnabled:   config.Logger.Enabled,
@@ -49,10 +49,8 @@ func NewWithLogger(mode CleanMode, config utils.Config) (*TextCleaner, error) {
 }
 
 func (c *TextCleaner) Clean(text string) string {
-	// Нормализуем Unicode (NFKC - совмещает совместимые символы)
+	// Нормализация Unicode и приведение к нижнему регистру
 	text = norm.NFKC.String(text)
-
-	// Приводим к нижнему регистру с учетом Unicode
 	text = strings.ToLower(text)
 
 	// Языковые преобразования (русский)
@@ -60,33 +58,23 @@ func (c *TextCleaner) Clean(text string) string {
 		text = strings.ReplaceAll(text, "ё", "е")
 	}
 
-	// Сохранение дат
+	// Основная очистка с учетом сохранения чисел и дат
+	preserveNumbers := c.config.Preserve.Fractions || c.config.Preserve.Decimals
+	c.re = createCleanupRegexp(c.mode, c.config.Preserve.Dates, preserveNumbers)
+	text = c.re.ReplaceAllString(text, "")
+
+	// Обработка дат после основной очистки
 	if c.config.Preserve.Dates {
-		// ISO (2000-12-31), американский (12/31/2000), европейский (31.12.2000)
-		datePattern := `(?:\d{4}-\d{2}-\d{2})|(?:\d{1,2}[/\-\.]\d{1,2}[/\-\.]\d{2,4})`
-		text = regexp.MustCompile(datePattern).ReplaceAllStringFunc(text, func(match string) string {
-			return " " + match + " " // Добавляем пробелы для сохранения как отдельного токена
-		})
+		text = processDates(text)
 	}
 
-	// Сохранение дробных чисел
+	// Обработка чисел после основной очистки
 	if c.config.Preserve.Fractions {
-		// Простые дроби (2/3, 1/4 и т.д.)
-		fractionPattern := `\b\d+/\d+\b`
-		text = regexp.MustCompile(fractionPattern).ReplaceAllStringFunc(text, func(match string) string {
-			return " " + match + " "
-		})
+		text = processFractions(text)
 	}
 
-	// Сохранение десятичных чисел
 	if c.config.Preserve.Decimals {
-		// Числа с плавающей точкой (5.20, 5,20)
-		decimalPattern := `\b\d+[\.,]\d+\b`
-		text = regexp.MustCompile(decimalPattern).ReplaceAllStringFunc(text, func(match string) string {
-			// Нормализуем разделитель к точке
-			normalized := strings.Replace(match, ",", ".", 1)
-			return " " + normalized + " "
-		})
+		text = processDecimals(text)
 	}
 
 	// Замена специальных сущностей
@@ -95,9 +83,6 @@ func (c *TextCleaner) Clean(text string) string {
 	// text = regexp.MustCompile(`\d+`).ReplaceAllString(text, " <num> ")
 	// text = regexp.MustCompile(`#[a-zа-яё0-9_]+`).ReplaceAllString(text, " <hashtag> ")
 	// text = regexp.MustCompile(`@[a-zа-яё0-9_]+`).ReplaceAllString(text, " <mention> ")
-
-	// Основная очистка текста
-	text = c.re.ReplaceAllString(text, "")
 
 	// Удаление слишком длинных слов с логированием
 	if c.logEnabled {
@@ -112,29 +97,32 @@ func (c *TextCleaner) Clean(text string) string {
 	return strings.TrimSpace(text)
 }
 
-func createCleanupRegexp(mode CleanMode) *regexp.Regexp {
+func createCleanupRegexp(mode CleanMode, preserveDates, preserveNumbers bool) *regexp.Regexp {
 	var pattern string
 
+	// Базовые разрешенные символы
+	baseChars := `\p{L}\p{N}\s`
+
+	// Добавляем дополнительные разрешенные символы в зависимости от режима
 	switch mode {
 	case ModeModern:
-		// Современные языки: русский, английский, основные европейские
-		pattern = `[^\p{L}\p{N}\sа-яёa-zà-ÿğüşıöç]`
-
+		pattern = `[^` + baseChars + `а-яёa-zà-ÿğüşıöç'`
 	case ModeOldSlavonic:
-		// Старославянские символы (явное перечисление)
 		oldSlavonicChars := "ѣѢѵѴіІѳѲѫѪѭѬѧѦѩѨѯѮѱѰѡѠѿѾҌҍꙋꙊꙗꙖꙙꙘꙜꙛꙝꙞꙟꙠꙡꙢꙣꙤꙥꙦꙧꙨꙩꙪꙫꙬꙭꙮѻѺѹѸѷѶѵѴѳѲѱѰѯѮѭѬѫѪѩѨѧѦѥѤѣѢѣѢѡѠџЏѾѽѼѻѺѹѸ"
-		pattern = `[^\p{L}\p{N}\s` + oldSlavonicChars + `]`
-
+		pattern = `[^` + baseChars + oldSlavonicChars
 	case ModeAll:
-		// Все буквы Unicode
-		pattern = `[^\p{L}\p{N}\s]`
+		pattern = `[^` + baseChars
 	}
 
-	re, err := regexp.Compile(pattern)
-	if err != nil {
-		panic("Failed to compile regexp for mode " + string(mode) + ": " + err.Error())
+	// Если нужно сохранять даты/числа, добавляем необходимые символы
+	if preserveDates || preserveNumbers {
+		pattern += `/\-\.\,`
 	}
-	return re
+
+	// Закрываем группу символов
+	pattern += `]`
+
+	return regexp.MustCompile(pattern)
 }
 
 func (c *TextCleaner) removeLongWordsWithLog(text string) string {
@@ -157,6 +145,36 @@ func (c *TextCleaner) Close() error {
 	return nil
 }
 
-func escapeToken(token string) string {
-	return " " + token + " " // Добавляем пробелы для отделения токена
+func processDates(text string) string {
+	// Объединяем все форматы дат в одно регулярное выражение
+	datePatterns := []string{
+		`\b\d{4}-\d{2}-\d{2}\b`,         // ISO (2000-12-31)
+		`\b\d{1,2}\.\d{1,2}\.\d{2,4}\b`, // 31.12.2000
+		`\b\d{1,2}/\d{1,2}/\d{2,4}\b`,   // 12/31/2000
+		`\b\d{1,2}-\d{1,2}-\d{2,4}\b`,   // 12-31-2000
+	}
+
+	for _, pattern := range datePatterns {
+		re := regexp.MustCompile(pattern)
+		text = re.ReplaceAllStringFunc(text, func(match string) string {
+			return " " + match + " " // Добавляем пробелы вокруг даты
+		})
+	}
+	return text
+}
+
+func processFractions(text string) string {
+	re := regexp.MustCompile(`\b\d+/\d+\b`)
+	return re.ReplaceAllStringFunc(text, func(match string) string {
+		return " " + match + " "
+	})
+}
+
+func processDecimals(text string) string {
+	re := regexp.MustCompile(`\b\d+[\.,]\d+\b`)
+	return re.ReplaceAllStringFunc(text, func(match string) string {
+		// Нормализуем разделитель к точке
+		normalized := strings.Replace(match, ",", ".", 1)
+		return " " + normalized + " "
+	})
 }
