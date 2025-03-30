@@ -26,6 +26,11 @@ go install github.com/terratensor/text2glove/cmd/text2glove@latest
 
 ## Быстрый старт
 
+Обработка любых текстов:
+```bash
+text2glove --input ./data --output output.txt --workers 8 --cleaner_mode all
+```
+
 Обработка современных текстов:
 ```bash
 text2glove --input ./data --output output.txt --workers 8 --cleaner_mode modern
@@ -99,9 +104,21 @@ make build
 
 ## Примеры обработки
 
+Для современных текстов:
+
+```bash
+bin/text2glove  --input ./old_texts --output output.txt --cleaner_mode modern
+```
+
 Современный русский:
 ```text
 "Привет, мир!" → "привет мир"
+```
+
+Для обработки старославянских текстов:
+
+```bash
+bin/text2glove --input ./old_texts --output output.txt --cleaner_mode old_slavonic
 ```
 
 Старославянский:
@@ -112,6 +129,12 @@ make build
 Смешанный текст:
 ```text
 "Сіе есть modern text" → "сіе есть modern text"
+```
+
+Для всех символов Unicode:
+
+```bash
+bin/text2glove --input ./multilingual --output output.txt --cleaner_mode all
 ```
 
 ## Вклад в проект
