@@ -10,7 +10,7 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/terratensor/text2glove/internal/cleaner"
+	"github.com/terratensor/text2glove/customcleaner"
 	"github.com/terratensor/text2glove/internal/processor"
 	"github.com/terratensor/text2glove/internal/writer"
 	"github.com/terratensor/text2glove/pkg/utils"
@@ -67,7 +67,9 @@ func main() {
 	fmt.Printf("Unicode normalization: %v\n", config.Cleaner.Normalize)
 
 	// Initialize components
-	textCleaner := cleaner.New(cleaner.CleanMode(config.Cleaner.Mode))
+	// textCleaner := cleaner.NewDefaultCleaner(cleaner.CleanMode(config.Cleaner.Mode))
+	textCleaner := customcleaner.NewCustomCleaner()
+
 	fileProcessor := processor.New(textCleaner)
 	resultWriter := writer.New(config.OutputFile, config.BufferSize)
 

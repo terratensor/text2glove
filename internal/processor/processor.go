@@ -15,10 +15,10 @@ const (
 )
 
 type FileProcessor struct {
-	cleaner *cleaner.TextCleaner
+	cleaner cleaner.TextCleaner // используем интерфейс вместо конкретной реализации
 }
 
-func New(cleaner *cleaner.TextCleaner) *FileProcessor {
+func New(cleaner cleaner.TextCleaner) *FileProcessor {
 	return &FileProcessor{
 		cleaner: cleaner,
 	}

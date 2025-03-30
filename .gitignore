@@ -14,3 +14,5 @@ go.sum
 # Output files
 output.txt
 *.log
+
+local.yaml
