@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"os"
 	"strings"
-	"sync/atomic"
 
 	"github.com/terratensor/text2glove/internal/cleaner"
 )
@@ -25,13 +24,13 @@ func New(cleaner *cleaner.TextCleaner) *FileProcessor {
 	}
 }
 
-func (p *FileProcessor) Work(id int, fileChan <-chan string, textChan chan<- string, reportEvery, totalFiles int) {
-	var processed uint64
+func (p *FileProcessor) Work(id int, fileChan <-chan string, textChan chan<- string, progressChan chan<- int) {
+	var processed int
 
 	for file := range fileChan {
 		text, err := p.processFile(file)
 		if err != nil {
-			fmt.Printf("Worker %d: error processing %s: %v\n", id, file, err)
+			fmt.Printf("\r\x1b[31mError:\x1b[0m %s: %v\n", file, err)
 			continue
 		}
 
@@ -39,11 +38,9 @@ func (p *FileProcessor) Work(id int, fileChan <-chan string, textChan chan<- str
 			textChan <- text
 		}
 
-		newProcessed := atomic.AddUint64(&processed, 1)
-		if newProcessed%uint64(reportEvery) == 0 {
-			progress := float64(newProcessed) / float64(totalFiles) * 100
-			fmt.Printf("Worker %d: processed %d/%d (%.1f%%)\n",
-				id, newProcessed, totalFiles, progress)
+		processed++
+		if processed%100 == 0 {
+			progressChan <- processed
 		}
 	}
 }

@@ -4,25 +4,42 @@ import (
 	"bufio"
 	"fmt"
 	"os"
+	"sync/atomic"
 	"time"
 )
+
+type Stats struct {
+	Lines    uint64
+	Bytes    uint64
+	Duration time.Duration
+}
 
 type ResultWriter struct {
 	filePath   string
 	bufferSize int
+	totalLines atomic.Uint64
+	totalBytes atomic.Uint64
+	startTime  time.Time
 }
 
 func New(filePath string, bufferSize int) *ResultWriter {
 	return &ResultWriter{
 		filePath:   filePath,
 		bufferSize: bufferSize,
+		startTime:  time.Now(),
 	}
 }
 
 func (w *ResultWriter) Write(textChan <-chan string) {
+	defer func() {
+		if r := recover(); r != nil {
+			fmt.Printf("\x1b[31mWriter panic: %v\x1b[0m\n", r)
+		}
+	}()
+
 	file, err := os.Create(w.filePath)
 	if err != nil {
-		fmt.Printf("Failed to create output file: %v\n", err)
+		fmt.Printf("\x1b[31mFailed to create output file: %v\x1b[0m\n", err)
 		return
 	}
 	defer file.Close()
@@ -30,26 +47,24 @@ func (w *ResultWriter) Write(textChan <-chan string) {
 	writer := bufio.NewWriterSize(file, w.bufferSize)
 	defer writer.Flush()
 
-	var totalLines, totalBytes uint64
-	startTime := time.Now()
-	lastReport := startTime
-
 	for text := range textChan {
-		n, err := writer.WriteString(text + "\n")
-		if err != nil {
-			fmt.Printf("Write error: %v\n", err)
+		if text == "" {
 			continue
 		}
-
-		totalLines++
-		totalBytes += uint64(n)
-
-		if time.Since(lastReport) > 5*time.Second {
-			rate := float64(totalBytes) / time.Since(startTime).Seconds() / 1024
-			fmt.Printf("Written: %d lines (%.1f KB/s)\n", totalLines, rate)
-			lastReport = time.Now()
+		_, err := writer.WriteString(text + "\n")
+		if err != nil {
+			fmt.Printf("\x1b[31mWrite error: %v\x1b[0m\n", err)
+			continue
 		}
+		w.totalLines.Add(1)
+		w.totalBytes.Add(uint64(len(text) + 1)) // +1 for newline
 	}
+}
 
-	fmt.Printf("Finished writing: %d lines, %d bytes\n", totalLines, totalBytes)
+func (w *ResultWriter) GetStats() Stats {
+	return Stats{
+		Lines:    w.totalLines.Load(),
+		Bytes:    w.totalBytes.Load(),
+		Duration: time.Since(w.startTime),
+	}
 }
