@@ -10,9 +10,10 @@ import (
 type CleanMode string
 
 const (
-	ModeModern      CleanMode = "modern"
-	ModeOldSlavonic CleanMode = "old_slavonic"
-	ModeAll         CleanMode = "all"
+	ModeModern         CleanMode = "modern"
+	ModeOldSlavonic    CleanMode = "old_slavonic"
+	ModeAll            CleanMode = "all"
+	ModeUnicodeLetters CleanMode = "unicode_letters"
 )
 
 type TextCleaner struct {
@@ -57,8 +58,12 @@ func createCleanupRegexp(mode CleanMode) *regexp.Regexp {
 		pattern = `[^\p{L}\p{N}\s` + oldSlavonicChars + `]`
 
 	case ModeAll:
-		// Все буквы Unicode
+		// Все буквы Unicode и цифры
 		pattern = `[^\p{L}\p{N}\s]`
+
+	case ModeUnicodeLetters:
+		// Все буквы Unicode без цифр
+		pattern = `[^\p{L}\s]`
 	}
 
 	re, err := regexp.Compile(pattern)

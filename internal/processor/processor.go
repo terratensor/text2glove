@@ -8,6 +8,8 @@ import (
 	"strings"
 
 	"github.com/terratensor/text2glove/internal/cleaner"
+	"github.com/terratensor/text2glove/internal/detector"
+	"github.com/terratensor/text2glove/internal/writer"
 )
 
 const (
@@ -24,8 +26,8 @@ func New(cleaner *cleaner.TextCleaner) *FileProcessor {
 	}
 }
 
-func (p *FileProcessor) Work(id int, fileChan <-chan string, textChan chan<- string, progressChan chan<- int) {
-	var processed int
+func (p *FileProcessor) Work(id int, fileChan <-chan string, textChan chan<- string, progressChan chan<- int, resultWriter *writer.ResultWriter) {
+	var processed, corrupted int
 
 	for file := range fileChan {
 		text, err := p.processFile(file)
@@ -35,12 +37,21 @@ func (p *FileProcessor) Work(id int, fileChan <-chan string, textChan chan<- str
 		}
 
 		if text != "" {
+			if detector.IsCorrupted(text) {
+				corrupted++
+				resultWriter.IncrementCorrupted()
+				continue // Пропускаем битые тексты
+			}
 			textChan <- text
 		}
 
 		processed++
 		if processed%100 == 0 {
 			progressChan <- processed
+			if corrupted > 0 {
+				fmt.Printf("\n\x1b[33mWorker %d: detected %d corrupted files\x1b[0m\n", id, corrupted)
+				corrupted = 0
+			}
 		}
 	}
 }

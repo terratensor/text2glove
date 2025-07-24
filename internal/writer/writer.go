@@ -9,9 +9,10 @@ import (
 )
 
 type Stats struct {
-	Lines    uint64
-	Bytes    uint64
-	Duration time.Duration
+	Lines     uint64
+	Bytes     uint64
+	Duration  time.Duration
+	Corrupted uint64 // Добавляем счетчик битых файлов
 }
 
 type ResultWriter struct {
@@ -19,6 +20,7 @@ type ResultWriter struct {
 	bufferSize int
 	totalLines atomic.Uint64
 	totalBytes atomic.Uint64
+	corrupted  atomic.Uint64 // Счетчик битых файлов
 	startTime  time.Time
 }
 
@@ -61,10 +63,16 @@ func (w *ResultWriter) Write(textChan <-chan string) {
 	}
 }
 
+// метод для инкрементации счетчика битых файлов
+func (w *ResultWriter) IncrementCorrupted() {
+	w.corrupted.Add(1)
+}
+
 func (w *ResultWriter) GetStats() Stats {
 	return Stats{
-		Lines:    w.totalLines.Load(),
-		Bytes:    w.totalBytes.Load(),
-		Duration: time.Since(w.startTime),
+		Lines:     w.totalLines.Load(),
+		Bytes:     w.totalBytes.Load(),
+		Duration:  time.Since(w.startTime),
+		Corrupted: w.corrupted.Load(),
 	}
 }

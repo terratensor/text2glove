@@ -1,0 +1,19 @@
+input: "/media/archive/corpus/geomatrix_geo_library_txt/"
+output: "geo_corpus.txt"
+workers: 32
+buffer_size: 1048576  # 1MB
+report_every: 100
+
+cleaner:
+  mode: "all"  # modern | old_slavonic | all
+  normalize: true       # применять Unicode-нормализацию
+  preserve_spaces: false # сохранять оригинальные пробелы
+
+logger:
+  long_words_log: "./long_words.log"  # путь к файлу лога
+  enabled: true                       # включить логирование
+
+preserve:
+  dates: true
+  fractions: true
+  decimals: true

@@ -30,7 +30,7 @@ func init() {
 	pflag.Int("workers", runtime.NumCPU(), "Number of workers")
 	pflag.Int("buffer_size", 1024*1024, "Writer buffer size in bytes")
 	pflag.Int("report_every", 100, "Report progress every N files")
-	pflag.String("cleaner_mode", "all", "Cleaner mode: modern|old_slavonic|all")
+	pflag.String("cleaner_mode", "unicode_letters", "Cleaner mode: modern|old_slavonic|all|unicode_letters")
 	pflag.Bool("normalize", true, "Apply Unicode normalization")
 }
 
@@ -132,7 +132,7 @@ func processFiles(config utils.Config, processor *processor.FileProcessor, resul
 		wg.Add(1)
 		go func(id int) {
 			defer wg.Done()
-			processor.Work(id, fileChan, textChan, progressChan)
+			processor.Work(id, fileChan, textChan, progressChan, resultWriter)
 		}(i + 1)
 	}
 
@@ -190,8 +190,9 @@ func printFinalStats(writer *writer.ResultWriter) {
 	mb := float64(stats.Bytes) / 1024 / 1024
 
 	fmt.Printf("\n\n\x1b[1m=== Processing completed ===\x1b[0m\n")
-	fmt.Printf("  Time:    %v\n", stats.Duration.Round(time.Second))
-	fmt.Printf("  Lines:   %d\n", stats.Lines)
-	fmt.Printf("  Data:    %.1f MB\n", mb)
-	fmt.Printf("  Speed:   %.1f KB/s\n", speed)
+	fmt.Printf("  Time:      %v\n", stats.Duration.Round(time.Second))
+	fmt.Printf("  Lines:     %d\n", stats.Lines)
+	fmt.Printf("  Corrupted: %d\n", stats.Corrupted) // Новая статистика
+	fmt.Printf("  Data:      %.1f MB\n", mb)
+	fmt.Printf("  Speed:     %.1f KB/s\n", speed)
 }
