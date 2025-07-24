@@ -1,5 +1,5 @@
-input: "/media/archive/corpus/geomatrix_geo_library_txt/"
-output: "geo_corpus.txt"
+input: "/mnt/archive/corpus/fortests/"
+output: "test_corpus.txt"
 workers: 32
 buffer_size: 1048576  # 1MB
 report_every: 100
@@ -8,6 +8,11 @@ cleaner:
   mode: "all"  # modern | old_slavonic | all
   normalize: true       # применять Unicode-нормализацию
   preserve_spaces: false # сохранять оригинальные пробелы
+
+lemmatization:
+  enable: true
+  mystem_path: "/usr/local/bin/mystem"
+  mystem_flags: "-ld"
 
 logger:
   long_words_log: "./long_words.log"  # путь к файлу лога

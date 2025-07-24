@@ -3,6 +3,7 @@ package main
 import (
 	"fmt"
 	"log"
+	"os/exec"
 	"path/filepath"
 	"runtime"
 	"strings"
@@ -11,6 +12,7 @@ import (
 	"time"
 
 	"github.com/terratensor/text2glove/internal/cleaner"
+	"github.com/terratensor/text2glove/internal/lemmatizer"
 	"github.com/terratensor/text2glove/internal/processor"
 	"github.com/terratensor/text2glove/internal/writer"
 	"github.com/terratensor/text2glove/pkg/utils"
@@ -32,46 +34,99 @@ func init() {
 	pflag.Int("report_every", 100, "Report progress every N files")
 	pflag.String("cleaner_mode", "unicode_letters", "Cleaner mode: modern|old_slavonic|all|unicode_letters")
 	pflag.Bool("normalize", true, "Apply Unicode normalization")
+	pflag.Bool("lemmatize", false, "Enable lemmatization with mystem")
+	pflag.String("mystem_path", "", "Path to mystem binary (default: look in PATH)")
+	pflag.String("mystem_flags", "-ld", "Mystem flags")
 }
 
 func main() {
 	pflag.Parse()
 
-	// Load configuration
-	if err := viper.BindPFlags(pflag.CommandLine); err != nil {
+	// 1. Инициализация Viper с явными значениями по умолчанию
+	v := viper.New()
+	v.SetDefault("lemmatization.enable", false)
+	v.SetDefault("lemmatization.mystem_path", "")
+	v.SetDefault("lemmatization.mystem_flags", "-ld")
+
+	// 2. Привязка флагов командной строки (высший приоритет)
+	if err := v.BindPFlags(pflag.CommandLine); err != nil {
 		log.Fatalf("Failed to bind flags: %v", err)
 	}
 
+	// 3. Загрузка конфига если указан
 	if configFile != "" {
-		viper.SetConfigFile(configFile)
-		if err := viper.ReadInConfig(); err != nil {
-			log.Fatalf("Failed to read config: %v", err)
+		v.SetConfigFile(configFile)
+		if err := v.ReadInConfig(); err != nil {
+			log.Fatalf("Error reading config file: %v", err)
 		}
 	}
 
+	// 4. Сборка финальной конфигурации
+	config := utils.Config{
+		InputDir:     v.GetString("input"),
+		OutputFile:   v.GetString("output"),
+		WorkersCount: v.GetInt("workers"),
+		BufferSize:   v.GetInt("buffer_size"),
+		ReportEvery:  v.GetInt("report_every"),
+	}
+	config.Cleaner.Mode = v.GetString("cleaner_mode")
+	config.Cleaner.Normalize = v.GetBool("normalize")
+	config.Lemmatization.Enable = v.GetBool("lemmatize") || v.GetBool("lemmatization.enable")
+	config.Lemmatization.MystemPath = v.GetString("mystem_path")
+	if config.Lemmatization.MystemPath == "" {
+		config.Lemmatization.MystemPath = v.GetString("lemmatization.mystem_path")
+	}
+	config.Lemmatization.MystemFlags = v.GetString("mystem_flags")
+	if config.Lemmatization.MystemFlags == "" {
+		config.Lemmatization.MystemFlags = v.GetString("lemmatization.mystem_flags")
+	}
+
+	// 5. Автопоиск mystem если путь не указан
+	if config.Lemmatization.Enable && config.Lemmatization.MystemPath == "" {
+		if path, err := exec.LookPath("mystem"); err == nil {
+			config.Lemmatization.MystemPath = path
+		} else {
+			log.Fatal("Mystem not found in PATH. Please specify --mystem_path")
+		}
+	}
+
+	startPipeline(config)
+}
+
+func startPipeline(config utils.Config) {
 	startTime := time.Now()
 
-	config := utils.Config{
-		InputDir:     viper.GetString("input"),
-		OutputFile:   viper.GetString("output"),
-		WorkersCount: viper.GetInt("workers"),
-		BufferSize:   viper.GetInt("buffer_size"),
-		ReportEvery:  viper.GetInt("report_every"),
-	}
-	config.Cleaner.Mode = viper.GetString("cleaner_mode")
-	config.Cleaner.Normalize = viper.GetBool("normalize")
-
 	fmt.Println("=== Starting Text2Glove ===")
+	if viper.ConfigFileUsed() != "" {
+		fmt.Printf("Config file: %s\n", viper.ConfigFileUsed())
+	}
+	fmt.Printf("Input directory: %s\n", config.InputDir)
+	fmt.Printf("Output file: %s\n", config.OutputFile)
 	fmt.Printf("Number of workers: %v\n", config.WorkersCount)
 	fmt.Printf("Cleaner mode: %s\n", config.Cleaner.Mode)
 	fmt.Printf("Unicode normalization: %v\n", config.Cleaner.Normalize)
+	fmt.Printf("Lemmatization enabled: %v\n", config.Lemmatization.Enable)
+	if config.Lemmatization.Enable {
+		fmt.Printf("Mystem path: %s\n", config.Lemmatization.MystemPath)
+		fmt.Printf("Mystem flags: %s\n", config.Lemmatization.MystemFlags)
+	}
 
-	// Initialize components
+	// Инициализация компонентов
 	textCleaner := cleaner.New(cleaner.CleanMode(config.Cleaner.Mode))
-	fileProcessor := processor.New(textCleaner)
+
+	var lem *lemmatizer.Lemmatizer
+	var err error
+	if config.Lemmatization.Enable {
+		lem, err = lemmatizer.New(config.Lemmatization.MystemPath, config.Lemmatization.MystemFlags)
+		if err != nil {
+			log.Fatalf("Failed to initialize lemmatizer: %v", err)
+		}
+	}
+
+	fileProcessor := processor.New(textCleaner, lem, config.Lemmatization.Enable)
 	resultWriter := writer.New(config.OutputFile, config.BufferSize)
 
-	// Start processing
+	// Обработка файлов
 	if err := processFiles(config, fileProcessor, resultWriter); err != nil {
 		log.Fatal(err)
 	}
@@ -80,12 +135,27 @@ func main() {
 }
 
 func processFiles(config utils.Config, processor *processor.FileProcessor, resultWriter *writer.ResultWriter) error {
-	files, err := filepath.Glob(filepath.Join(config.InputDir, "*.gz"))
+	// Исправленный поиск файлов с пробелами в именах
+	pattern := filepath.Join(config.InputDir, "*.gz")
+	matches, err := filepath.Glob(pattern)
 	if err != nil {
 		return fmt.Errorf("failed to list files: %v", err)
 	}
 
-	totalFiles := uint64(len(files))
+	// Альтернативный метод для имен с пробелами
+	if len(matches) == 0 {
+		files, err := filepath.Glob(filepath.Join(config.InputDir, "*"))
+		if err != nil {
+			return fmt.Errorf("failed to list files: %v", err)
+		}
+		for _, f := range files {
+			if strings.HasSuffix(strings.ToLower(f), ".gz") {
+				matches = append(matches, f)
+			}
+		}
+	}
+
+	totalFiles := len(matches)
 	if totalFiles == 0 {
 		return fmt.Errorf("no .gz files found in directory %s", config.InputDir)
 	}
@@ -120,7 +190,7 @@ func processFiles(config utils.Config, processor *processor.FileProcessor, resul
 				}
 				totalProcessed.Add(uint64(n))
 			case <-ticker.C:
-				printProgress(totalProcessed.Load(), totalFiles, resultWriter)
+				printProgress(totalProcessed.Load(), uint64(totalFiles), resultWriter)
 			case <-done:
 				return
 			}
@@ -138,7 +208,7 @@ func processFiles(config utils.Config, processor *processor.FileProcessor, resul
 
 	// Отправляем файлы в канал для обработки
 	go func() {
-		for _, file := range files {
+		for _, file := range matches {
 			fileChan <- file
 		}
 		close(fileChan)

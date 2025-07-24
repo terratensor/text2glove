@@ -12,12 +12,10 @@ type Config struct {
 		Normalize      bool   `yaml:"normalize"`
 		PreserveSpaces bool   `yaml:"preserve_spaces"`
 	} `yaml:"cleaner"`
+
+	Lemmatization struct {
+		Enable      bool   `yaml:"enable"`
+		MystemPath  string `yaml:"mystem_path"`
+		MystemFlags string `yaml:"mystem_flags"`
+	} `yaml:"lemmatization"`
 }
-
-type CleanMode string
-
-const (
-	ModeModern      CleanMode = "modern"
-	ModeOldSlavonic CleanMode = "old_slavonic"
-	ModeAll         CleanMode = "all"
-)

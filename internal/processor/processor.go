@@ -4,11 +4,13 @@ import (
 	"bufio"
 	"compress/gzip"
 	"fmt"
+	"log"
 	"os"
 	"strings"
 
 	"github.com/terratensor/text2glove/internal/cleaner"
 	"github.com/terratensor/text2glove/internal/detector"
+	"github.com/terratensor/text2glove/internal/lemmatizer"
 	"github.com/terratensor/text2glove/internal/writer"
 )
 
@@ -17,12 +19,16 @@ const (
 )
 
 type FileProcessor struct {
-	cleaner *cleaner.TextCleaner
+	cleaner    *cleaner.TextCleaner
+	lemmatizer *lemmatizer.Lemmatizer
+	lemmatize  bool
 }
 
-func New(cleaner *cleaner.TextCleaner) *FileProcessor {
+func New(cleaner *cleaner.TextCleaner, lemmatizer *lemmatizer.Lemmatizer, lemmatize bool) *FileProcessor {
 	return &FileProcessor{
-		cleaner: cleaner,
+		cleaner:    cleaner,
+		lemmatizer: lemmatizer,
+		lemmatize:  lemmatize,
 	}
 }
 
@@ -88,5 +94,18 @@ func (p *FileProcessor) processFile(filePath string) (string, error) {
 		return "", fmt.Errorf("scanner error: %v", err)
 	}
 
-	return builder.String(), nil
+	content := builder.String()
+	// Применяем лемматизацию
+	if p.lemmatize && p.lemmatizer != nil {
+		lemmatized, err := p.lemmatizer.Lemmatize(content)
+		if err != nil {
+			log.Printf("Lemmatization failed for file %s: %v", filePath, err)
+			// Можно продолжить без лемматизации
+			// return "", fmt.Errorf("lemmatization failed: %v", err)
+		} else {
+			content = lemmatized
+		}
+	}
+
+	return content, nil
 }
