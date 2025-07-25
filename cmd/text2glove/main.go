@@ -32,7 +32,7 @@ func init() {
 	pflag.Int("workers", runtime.NumCPU(), "Number of workers")
 	pflag.Int("buffer_size", 1024*1024, "Writer buffer size in bytes")
 	pflag.Int("report_every", 100, "Report progress every N files")
-	pflag.String("cleaner_mode", "unicode_letters", "Cleaner mode: modern|old_slavonic|all|unicode_letters")
+	pflag.String("cleaner_mode", "unicode_letters_and_numbers", "Cleaner mode: modern|old_slavonic|all|unicode_letters")
 	pflag.Bool("normalize", true, "Apply Unicode normalization")
 	pflag.Bool("lemmatize", false, "Enable lemmatization with mystem")
 	pflag.String("mystem_path", "", "Path to mystem binary (default: look in PATH)")
@@ -111,9 +111,18 @@ func startPipeline(config utils.Config) {
 		fmt.Printf("Mystem flags: %s\n", config.Lemmatization.MystemFlags)
 	}
 
-	// Инициализация компонентов
-	textCleaner := cleaner.New(cleaner.CleanMode(config.Cleaner.Mode))
+	// Инициализация cleaner с опциями
+	cleanOptions := cleaner.CleanOptions{
+		KeepNumbers:      config.Cleaner.KeepNumbers,      // из конфига
+		KeepRomanNumbers: config.Cleaner.KeepRomanNumbers, // из конфига
+	}
 
+	textCleaner := cleaner.New(
+		cleaner.CleanMode(config.Cleaner.Mode),
+		cleanOptions,
+	)
+
+	// Инициализация компонентов
 	var lem *lemmatizer.Lemmatizer
 	var err error
 	if config.Lemmatization.Enable {

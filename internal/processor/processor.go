@@ -36,18 +36,18 @@ func (p *FileProcessor) Work(id int, fileChan <-chan string, textChan chan<- str
 	var processed, corrupted int
 
 	for file := range fileChan {
-		text, err := p.processFile(file)
+		text, err := p.processFile(file, resultWriter)
 		if err != nil {
 			fmt.Printf("\r\x1b[31mError:\x1b[0m %s: %v\n", file, err)
 			continue
 		}
 
 		if text != "" {
-			if detector.IsCorrupted(text) {
-				corrupted++
-				resultWriter.IncrementCorrupted()
-				continue // Пропускаем битые тексты
-			}
+			// if detector.IsCorrupted(text) {
+			// 	corrupted++
+			// 	resultWriter.IncrementCorrupted()
+			// 	continue // Пропускаем битые тексты
+			// }
 			textChan <- text
 		}
 
@@ -62,7 +62,7 @@ func (p *FileProcessor) Work(id int, fileChan <-chan string, textChan chan<- str
 	}
 }
 
-func (p *FileProcessor) processFile(filePath string) (string, error) {
+func (p *FileProcessor) processFile(filePath string, resultWriter *writer.ResultWriter) (string, error) {
 	file, err := os.Open(filePath)
 	if err != nil {
 		return "", fmt.Errorf("failed to open file: %v", err)
@@ -83,6 +83,16 @@ func (p *FileProcessor) processFile(filePath string) (string, error) {
 
 	for scanner.Scan() {
 		line := scanner.Text()
+		if detector.IsCorrupted(line) {
+			// corrupted++
+			if len(line) > 100 {
+				log.Printf("Corrupted line: %s...", line[:100]) // можно добавить "..." для ясности
+			} else {
+				log.Printf("Corrupted line: %s", line)
+			}
+			resultWriter.IncrementCorrupted()
+			// continue // Пропускаем битые тексты
+		}
 		cleanLine := p.cleaner.Clean(line)
 		if cleanLine != "" {
 			builder.WriteString(cleanLine)
