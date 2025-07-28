@@ -3,37 +3,85 @@ package lemmatizer
 import (
 	"bytes"
 	"fmt"
+	"os"
 	"os/exec"
+	"path/filepath"
 	"regexp"
 	"strings"
+	"sync"
+	"unicode/utf8"
 )
 
 type Lemmatizer struct {
 	mystemPath  string
 	mystemFlags []string
+	logFile     *os.File
+	logEnabled  bool
+	logMutex    sync.Mutex
 }
 
-func New(mystemPath string, flags string) (*Lemmatizer, error) {
-	if _, err := exec.LookPath(mystemPath); err != nil {
-		return nil, fmt.Errorf("mystem not found at %s: %v", mystemPath, err)
-	}
-	return &Lemmatizer{
+func New(mystemPath, flags string, logEnabled bool, logPath string) (*Lemmatizer, error) {
+	lem := &Lemmatizer{
 		mystemPath:  mystemPath,
 		mystemFlags: parseFlags(flags),
-	}, nil
+		logEnabled:  logEnabled,
+	}
+
+	// Создаем лог-файл только если логирование включено
+	if logEnabled {
+		// Создаем директории, если их нет
+		if err := os.MkdirAll(filepath.Dir(logPath), 0755); err != nil {
+			return nil, fmt.Errorf("failed to create log directory: %v", err)
+		}
+
+		file, err := os.OpenFile(logPath, os.O_CREATE|os.O_WRONLY|os.O_APPEND, 0644)
+		if err != nil {
+			return nil, fmt.Errorf("failed to open log file: %v", err)
+		}
+		lem.logFile = file
+	}
+	return lem, nil
 }
 
-func (l *Lemmatizer) Lemmatize(text string) (string, error) {
+func (l *Lemmatizer) Close() {
+	if l.logFile != nil {
+		l.logFile.Close()
+	}
+}
+
+func (l *Lemmatizer) Lemmatize(text, filename string) (string, error) {
 	if text == "" {
 		return "", nil
 	}
 
-	cmd := exec.Command(l.mystemPath, append(l.mystemFlags, "-")...)
+	// Фильтрация токенов
+	var validTokens []string
+	tokens := strings.Fields(text)
+	for _, token := range tokens {
+		// tokenRunes := []rune(token)
+		tokenLen := utf8.RuneCountInString(token)
 
-	cmd.Stdin = strings.NewReader(text)
-	var out bytes.Buffer
+		switch {
+		case tokenLen > 100: // Опасные токены
+			l.logToken(filename, token, "DANGER")
+			continue
+		case tokenLen > 30: // Длинные токены
+			l.logToken(filename, token, "LONG")
+		}
+		validTokens = append(validTokens, token)
+	}
+
+	filteredText := strings.Join(validTokens, " ")
+	if filteredText == "" {
+		return "", nil
+	}
+
+	// Вызов mystem
+	cmd := exec.Command(l.mystemPath, append(l.mystemFlags, "-")...)
+	cmd.Stdin = strings.NewReader(filteredText)
+
+	var out, stderr bytes.Buffer
 	cmd.Stdout = &out
-	var stderr bytes.Buffer
 	cmd.Stderr = &stderr
 
 	if err := cmd.Run(); err != nil {
@@ -41,6 +89,18 @@ func (l *Lemmatizer) Lemmatize(text string) (string, error) {
 	}
 
 	return processMystemOutput(out.String()), nil
+}
+
+func (l *Lemmatizer) logToken(filename, token, level string) {
+	if !l.logEnabled || l.logFile == nil {
+		return
+	}
+
+	l.logMutex.Lock()
+	defer l.logMutex.Unlock()
+
+	logLine := fmt.Sprintf("[%s] %s: %s\n", level, filename, token)
+	l.logFile.WriteString(logLine)
 }
 
 func processMystemOutput(output string) string {

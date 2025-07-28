@@ -90,6 +90,10 @@ func main() {
 		}
 	}
 
+	// Добавляем чтение настроек логгера
+	config.Logger.Enabled = v.GetBool("logger.enabled")
+	config.Logger.LongWordsLog = v.GetString("logger.long_words_log")
+
 	startPipeline(config)
 }
 
@@ -106,6 +110,8 @@ func startPipeline(config utils.Config) {
 	fmt.Printf("Cleaner mode: %s\n", config.Cleaner.Mode)
 	fmt.Printf("Unicode normalization: %v\n", config.Cleaner.Normalize)
 	fmt.Printf("Lemmatization enabled: %v\n", config.Lemmatization.Enable)
+	fmt.Printf("Logger enabled: %v\n", config.Logger.Enabled)
+	fmt.Printf("Long words log: %v\n", config.Logger.LongWordsLog)
 	if config.Lemmatization.Enable {
 		fmt.Printf("Mystem path: %s\n", config.Lemmatization.MystemPath)
 		fmt.Printf("Mystem flags: %s\n", config.Lemmatization.MystemFlags)
@@ -122,14 +128,20 @@ func startPipeline(config utils.Config) {
 		cleanOptions,
 	)
 
-	// Инициализация компонентов
+	// Инициализация лемматизатора с логгером
 	var lem *lemmatizer.Lemmatizer
 	var err error
 	if config.Lemmatization.Enable {
-		lem, err = lemmatizer.New(config.Lemmatization.MystemPath, config.Lemmatization.MystemFlags)
+		lem, err = lemmatizer.New(
+			config.Lemmatization.MystemPath,
+			config.Lemmatization.MystemFlags,
+			config.Logger.Enabled,      // передаем флаг включения логирования
+			config.Logger.LongWordsLog, // передаем путь к лог-файлу
+		)
 		if err != nil {
 			log.Fatalf("Failed to initialize lemmatizer: %v", err)
 		}
+		defer lem.Close()
 	}
 
 	fileProcessor := processor.New(textCleaner, lem, config.Lemmatization.Enable)

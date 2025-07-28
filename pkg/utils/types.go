@@ -20,4 +20,9 @@ type Config struct {
 		MystemPath  string `yaml:"mystem_path"`
 		MystemFlags string `yaml:"mystem_flags"`
 	} `yaml:"lemmatization"`
+
+	Logger struct {
+		Enabled      bool   `yaml:"enabled"`
+		LongWordsLog string `yaml:"long_words_log"`
+	} `yaml:"logger"`
 }

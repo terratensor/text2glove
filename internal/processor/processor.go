@@ -106,12 +106,11 @@ func (p *FileProcessor) processFile(filePath string, resultWriter *writer.Result
 
 	content := builder.String()
 	// Применяем лемматизацию
+	// Передаем имя файла в лемматизатор
 	if p.lemmatize && p.lemmatizer != nil {
-		lemmatized, err := p.lemmatizer.Lemmatize(content)
+		lemmatized, err := p.lemmatizer.Lemmatize(content, filePath) // передаем filePath
 		if err != nil {
 			log.Printf("Lemmatization failed for file %s: %v", filePath, err)
-			// Можно продолжить без лемматизации
-			// return "", fmt.Errorf("lemmatization failed: %v", err)
 		} else {
 			content = lemmatized
 		}
