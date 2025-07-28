@@ -80,9 +80,9 @@ func (c *TextCleaner) Clean(text string) string {
 	if !c.options.KeepRomanNumbers && c.romanNumRe != nil {
 		text = c.romanNumRe.ReplaceAllString(text, " ")
 	}
-	if !c.options.KeepNumbers && c.numbersRe != nil {
-		text = c.numbersRe.ReplaceAllString(text, " ")
-	}
+	// if !c.options.KeepNumbers && c.numbersRe != nil {
+	// 	text = c.numbersRe.ReplaceAllString(text, " ")
+	// }
 
 	// 8. Удаление нежелательных символов по режиму
 	text = c.re.ReplaceAllString(text, " ")
