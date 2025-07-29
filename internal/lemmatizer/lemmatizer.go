@@ -12,6 +12,10 @@ import (
 	"unicode/utf8"
 )
 
+const (
+	maxChunkSize = 5 * 1024 * 1024 // 5MB
+)
+
 type Lemmatizer struct {
 	mystemPath  string
 	mystemFlags []string
@@ -58,27 +62,64 @@ func (l *Lemmatizer) Lemmatize(text, filename string) (string, error) {
 	var validTokens []string
 	tokens := strings.Fields(text)
 	for _, token := range tokens {
-		// tokenRunes := []rune(token)
 		tokenLen := utf8.RuneCountInString(token)
 
 		switch {
 		case tokenLen > 100: // Опасные токены
 			l.logToken(filename, token, "DANGER")
 			continue
-		case tokenLen > 30: // Длинные токены
+		case tokenLen > 50: // Длинные токены
 			l.logToken(filename, token, "LONG")
 		}
 		validTokens = append(validTokens, token)
 	}
 
-	filteredText := strings.Join(validTokens, " ")
-	if filteredText == "" {
+	if len(validTokens) == 0 {
 		return "", nil
 	}
 
-	// Вызов mystem
+	// Разбиваем на порции по размеру (в байтах)
+	var resultBuilder strings.Builder
+	currentChunk := &bytes.Buffer{}
+	currentSize := 0
+
+	for _, token := range validTokens {
+		tokenBytes := []byte(token + " ")
+		tokenSize := len(tokenBytes)
+
+		// Если добавление токена превысит лимит, обрабатываем текущую порцию
+		if currentSize+tokenSize > maxChunkSize && currentSize > 0 {
+			if chunkResult, err := l.processChunk(currentChunk.String()); err == nil {
+				resultBuilder.WriteString(chunkResult)
+				resultBuilder.WriteString(" ")
+			} else {
+				return "", fmt.Errorf("chunk processing failed: %v", err)
+			}
+
+			// Сбрасываем буфер для новой порции
+			currentChunk.Reset()
+			currentSize = 0
+		}
+
+		currentChunk.Write(tokenBytes)
+		currentSize += tokenSize
+	}
+
+	// Обрабатываем последнюю порцию
+	if currentSize > 0 {
+		if chunkResult, err := l.processChunk(currentChunk.String()); err == nil {
+			resultBuilder.WriteString(chunkResult)
+		} else {
+			return "", fmt.Errorf("chunk processing failed: %v", err)
+		}
+	}
+
+	return resultBuilder.String(), nil
+}
+
+func (l *Lemmatizer) processChunk(chunk string) (string, error) {
 	cmd := exec.Command(l.mystemPath, append(l.mystemFlags, "-")...)
-	cmd.Stdin = strings.NewReader(filteredText)
+	cmd.Stdin = strings.NewReader(chunk)
 
 	var out, stderr bytes.Buffer
 	cmd.Stdout = &out
